@@ -1,7 +1,8 @@
 services:
   streamlit:
-    build: ./streamlit
-    container_name: streamlit_app
+    build: ./frontend
+    container_name: frontend
+    restart: unless-stopped
     ports:
       - "8501:8501"
     environment:
@@ -15,7 +16,7 @@ services:
   postgres:
     image: postgres:15
     container_name: postgres_db
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -23,12 +24,13 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - ./db/data:/var/lib/postgresql/data
+      - ./db/initdb:/docker-entrypoint-initdb.d
 
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
-    restart: always
+    restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
@@ -36,6 +38,3 @@ services:
       - "5050:80"
     depends_on:
       - postgres
-
-volumes:
-  postgres_data:
