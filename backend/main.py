@@ -5,7 +5,8 @@ import pandas as pd
 import weaviate
 from weaviate_init import initialize_weaviate
 
-app = FastAPI()
+app = FastAPI(root_path="/api/v1")
+
 
 # --- Database connection setup ---
 DB_HOST = os.getenv("DATABASE_HOST", "postgres")
