@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import datetime
 
 # Page configuration
 st.set_page_config(
@@ -32,7 +33,7 @@ if send_button:
             # Prepare data
             payload = {
                 "message": text_input,
-                "timestamp": "2024-01-01"  # You can add datetime.now() here
+                "timestamp": datetime.now().isoformat()  # You can add datetime.now() here
             }
             
             # Send to API
