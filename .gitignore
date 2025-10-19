@@ -4,6 +4,9 @@ rag/
 # pycharm stuff
 .idea/
 
+# db container
+./db/data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -211,6 +214,3 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-
-
-./db/
