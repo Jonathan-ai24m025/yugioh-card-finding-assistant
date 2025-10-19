@@ -24,8 +24,13 @@ logger.info(f"LLM module: using MODEL_NAME = {MODEL_NAME}")
 
 # load model (keep try/except)
 try:
+    # TODO: replace model with API-call to ollama
+    # TODO: Do this with LangChain Pipeline for more versatility
+    # TODO: Include guardrails (i.e. Microsoft Presidio, NeMo Guardrails)
+    # TODO: Include optional calls to RAG/ DB if the LLM deems it necessary
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+    #model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+    model = None  # to save V-RAM
     generator = pipeline("text-generation", model=model, tokenizer=tokenizer, device_map="auto")
     logger.info("Model loaded.")
 except Exception:

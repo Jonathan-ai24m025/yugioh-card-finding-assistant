@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import psycopg2
 import os
-from llm_modle import call_llm
+from llm_model import call_llm
 import pandas as pd
 import weaviate
 from sentence_transformers import SentenceTransformer
