@@ -4,6 +4,9 @@ rag/
 # pycharm stuff
 .idea/
 
+# db container
+./db/data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -1,18 +1,11 @@
-import os
 import time
 import pandas as pd
-import weaviate
-from weaviate.classes.config import Property, DataType
-from transformers import AutoTokenizer
+from weaviate.classes.config import Property, DataType, Configure
 
-WEAVIATE_HOST = os.getenv("WEAVIATE_HOST", "weaviate")
-WEAVIATE_PORT = os.getenv("WEAVIATE_PORT", "8080")
-#WEAVIATE_URL = f"http://{WEAVIATE_HOST}:{WEAVIATE_PORT}"
 
-# TODO: Doesn't work yet
-async def initialize_weaviate(csv_path: str):
+def initialize_weaviate(csv_path: str, get_rag, tokenizer):
     """Check if Weaviate has data; if empty, load from CSV."""
-    client = weaviate.connect_to_local(host=WEAVIATE_HOST, port=WEAVIATE_PORT)
+    client = get_rag()
 
     # Wait until Weaviate is ready
     for _ in range(30):
@@ -20,55 +13,86 @@ async def initialize_weaviate(csv_path: str):
             if client.is_ready():
                 break
         except Exception:
-            print("⏳ Waiting for Weaviate to start...")
+            print("Waiting for Weaviate to start...")
             time.sleep(2)
 
-    # Check if collection exists
-    existing_collections = [c["name"] for c in client.collections.get_all()]
-    if COLLECTION_NAME not in existing_collections:
-        print(f"Creating collection '{COLLECTION_NAME}'...")
-
-        # Use free HuggingFace model integration for vectorization
-        # Here we configure text2vec-transformers
-        vector_config = Configure.Vectors.text2vec_transformers(
-            model="sentence-transformers/all-MiniLM-L6-v2"
-        )
-
-        collection = client.collections.create(
-            name=COLLECTION_NAME,
-            vector_config=vector_config
-        )
-    else:
-        collection = client.collections.use(COLLECTION_NAME)
-
-    # Check if collection already has data
-    if collection.count() > 0:
-        print(f"Collection '{COLLECTION_NAME}' already populated ({collection.count()} objects). Skipping.")
+    # --- Check if collection already exists ---
+    existing_collections = [c for c in client.collections.list_all()]
+    if "Card" in existing_collections:
+        print("'Card' collection already exists, skipping initialization.")
         client.close()
         return
 
-    print("Populating Weaviate with card data...")
+    print("Creating 'Card' collection schema...")
+    client.collections.create(
+        name="Card",
+        description="Trading cards with text and attributes for semantic search",
+        vector_config=Configure.Vectors.self_provided(),
+        properties=[
+            # TODO: clean up csv from NaN etc.
+            #       setting data_type to TEXT for all for now.
+            Property(name="name", data_type=DataType.TEXT),
+            Property(name="description", data_type=DataType.TEXT),
+            Property(name="set_id", data_type=DataType.TEXT),
+            Property(name="rarity", data_type=DataType.TEXT),
+            Property(name="type", data_type=DataType.TEXT),
+            Property(name="sub_type", data_type=DataType.TEXT),
+            Property(name="attribute", data_type=DataType.TEXT),
+            Property(name="set_name", data_type=DataType.TEXT),
+            Property(name="set_release", data_type=DataType.TEXT),
+            Property(name="price", data_type=DataType.TEXT),
+            Property(name="attack", data_type=DataType.TEXT),
+            Property(name="defense", data_type=DataType.TEXT),
+        ],
+    )
+
     df = pd.read_csv(csv_path)
 
-    # Batch import
-    with collection.batch.fixed_size(batch_size=200) as batch:
-        for _, row in df.iterrows():
-            obj = {
-                "name": row["name"],
-                "description": row["description"],
-                "set_name": row["set_name"],
-                "type": row["type"],
-                "attribute": row["attribute"]
-            }
-            batch.add_object(obj)
-            if batch.number_errors > 10:
-                print("Batch import stopped due to excessive errors.")
-                break
+    collection = client.collections.get("Card")
 
-    failed_objects = collection.batch.failed_objects
-    if failed_objects:
-        print(f"Number of failed imports: {len(failed_objects)}")
-        print(f"First failed object: {failed_objects[0]}")
+    print(f"Creating 'Card' collection with {len(df)} objects (THIS CAN TAKE SEVERAL MINUTES)...")
+    counter = 0
+
+    with collection.batch.dynamic() as batch:
+        for _, row in df.iterrows():
+            # Build text input for embedding (ignore numbers)
+            text_parts = [
+                str(row.get("name", "")),
+                str(row.get("description", "")),
+                str(row.get("rarity", "")),
+                str(row.get("type", "")),
+                str(row.get("sub_type", "")),
+                str(row.get("attribute", "")),
+                str(row.get("set_name", "")),
+            ]
+            text = ". ".join([t for t in text_parts if t.strip()])
+
+            if not text.strip():
+                continue  # skip empty
+
+            vector = tokenizer.encode(text)
+
+            properties = {
+                "name": row.get("name"),
+                "description": row.get("description"),
+                "set_id": row.get("set_id"),
+                "rarity": row.get("rarity"),
+                "type": row.get("type"),
+                "sub_type": row.get("sub_type"),
+                "attribute": row.get("attribute"),
+                "set_name": row.get("set_name"),
+                "set_release": row.get("set_release"),
+                "price": row.get("price"),
+                "attack": row.get("attack"),
+                "defense": row.get("defense"),
+            }
+
+            if counter % 1000 == 0:
+                print(f"{counter}/{len(df)}...")
+            counter += 1
+
+            batch.add_object(properties=properties, vector=vector)
+
 
     print("Weaviate initialization complete.")
     client.close()

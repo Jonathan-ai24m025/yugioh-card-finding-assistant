@@ -4,5 +4,4 @@ psycopg2-binary
 pandas
 weaviate-client
 transformers
-torch
-requests
+sentence-transformers
