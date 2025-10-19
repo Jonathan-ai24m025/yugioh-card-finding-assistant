@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 import psycopg2
 import os
+from llm_modle import call_llm
 import pandas as pd
 import weaviate
 from weaviate_init import initialize_weaviate
 
-app = FastAPI(root_path="/api/v1")
 
+app = FastAPI(root_path="/api/v1")
 
 # --- Database connection setup ---
 DB_HOST = os.getenv("DATABASE_HOST", "postgres")
@@ -17,6 +18,7 @@ DB_PASS = os.getenv("DATABASE_PASSWORD", "postgres")
 WEAVIATE_HOST = os.getenv("WEAVIATE_HOST", "weaviate")
 WEAVIATE_PORT = os.getenv("WEAVIATE_PORT", "8080")
 
+
 # --- Postgres connection ---
 def get_connection():
     return psycopg2.connect(
@@ -26,16 +28,33 @@ def get_connection():
         password=DB_PASS
     )
 
+
 @app.on_event("startup")
 async def startup_event():
     pass
     # TODO: Weaviate doesn't work yet.
-    #print("Checking Weaviate state...")
-    #await initialize_weaviate("./cards.csv")
+    # print("Checking Weaviate state...")
+    # await initialize_weaviate("./cards.csv")
+
+
+# ---------------------------
+# Neuer Endpoint: LLM Test
+# ---------------------------
+
+
+@app.get("/llm_test/{query}")
+def llm_test(query: str):
+    candidates = [
+        {"name": "Blue-Eyes White Dragon", "description": "Legendary dragon card"},
+        {"name": "Dark Magician", "description": "Powerful magician"},
+        {"name": "Red-Eyes Black Dragon", "description": "Fierce dragon card"}
+    ]
+    return call_llm(query, candidates)
 
 @app.get("/")
 def root():
     return {"message": "FastAPI backend is running"}
+
 
 @app.get("/cards")
 def get_cards():
@@ -52,6 +71,7 @@ def get_cards():
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/rag/{text}")
 def rag_search(text: str):
     """
@@ -60,7 +80,7 @@ def rag_search(text: str):
     """
     # TODO: Weaviate doesn't work yet.
     '''
-    
+
     try:
         client = weaviate.connect_to_local(host=WEAVIATE_HOST, port=WEAVIATE_PORT)
         # Semantic search with limit=3
@@ -79,3 +99,7 @@ def rag_search(text: str):
 
     '''
     return {"text": "some sample text."}
+
+
+
+
