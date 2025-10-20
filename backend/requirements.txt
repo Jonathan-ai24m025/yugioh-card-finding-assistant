@@ -5,3 +5,4 @@ pandas
 weaviate-client
 transformers
 sentence-transformers
+ollama

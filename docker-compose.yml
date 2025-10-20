@@ -25,15 +25,38 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=mistral
       - DATABASE_HOST=postgres
       - DATABASE_NAME=postgres
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
       - WEAVIATE_HOST=weaviate
       - WEAVIATE_PORT=8080
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]  # used for tokenizer for rag
     depends_on:
+      - ollama
       - postgres
       - weaviate
+
+  # === INFERENCE ENGINE ===
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./llm:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
 
   # === DATABASE ===
   postgres:

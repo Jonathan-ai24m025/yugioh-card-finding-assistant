@@ -1,15 +1,18 @@
 from fastapi import FastAPI
+from pydantic import BaseModel
 import psycopg2
-import os
-from llm_model import call_llm
-import pandas as pd
 import weaviate
+from ollama import Client
 from sentence_transformers import SentenceTransformer
-from functools import lru_cache
-from weaviate_init import initialize_weaviate
+from init import initialize_weaviate, initialize_ollama
+import torch
+import os
 
 
 app = FastAPI(root_path="/api/v1")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama-test:11434")
+#OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:latest")
 DB_HOST = os.getenv("DATABASE_HOST", "postgres")
 #DB_HOST = os.getenv("DATABASE_HOST", "localhost")
 DB_NAME = os.getenv("DATABASE_NAME", "postgres")
@@ -28,43 +31,61 @@ def get_db():
         password=DB_PASS
     )
 
-
 def get_rag():
     return weaviate.connect_to_local(
         host=WEAVIATE_HOST,
         port=WEAVIATE_PORT
     )
 
+def get_llm():
+    return Client(
+        host=OLLAMA_URL
+    )
+
 
 @app.on_event("startup")
 async def startup_event():
     print("Checking Weaviate state...")
-    tokenizer = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+    print(f"Torch: {torch.__version__}, CUDA: {torch.version.cuda}")
+
+    if torch.cuda.is_available():
+        tokenizer = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cuda")
+    else:
+        print("No CUDA found. Using CPU for tokenization.")
+        tokenizer = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
 
     initialize_weaviate(csv_path="./cards.csv", get_rag=get_rag, tokenizer=tokenizer)
-
+    initialize_ollama(get_llm=get_llm, model_name=OLLAMA_MODEL)
     #TODO: figure out CUDA problems (wrong pyTorch version, Docker GPU passthrough)
     app.state.tokenizer = tokenizer
     app.state.weaviate = weaviate.connect_to_local(host=WEAVIATE_HOST, port=WEAVIATE_PORT)
 
 
-# ---------------------------
-# Neuer Endpoint: LLM Test
-# ---------------------------
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+    def to_dict(self) -> dict:
+        return {"role": self.role, "content": self.content}
+
+class ChatRequest(BaseModel):
+    message: ChatMessage
+    history: list[ChatMessage] = []
+
+    def to_prompt(self) -> list:
+        hist = []
+        for h in self.history:
+            hist.append(h.to_dict())
+        hist.append(self.message.to_dict())
+        return hist
 
 
-@app.get("/llm_test/{query}")
-def llm_test(query: str):
-    candidates = [
-        {"name": "Blue-Eyes White Dragon", "description": "Legendary dragon card"},
-        {"name": "Dark Magician", "description": "Powerful magician"},
-        {"name": "Red-Eyes Black Dragon", "description": "Fierce dragon card"}
-    ]
-    return call_llm(query, candidates)
-
-@app.get("/")
-def root():
-    return {"message": "FastAPI backend is running"}
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    client = Client(host=OLLAMA_URL)
+    print(req.to_prompt())
+    response = client.chat(model="mistral:latest", messages=req.to_prompt())
+    return {"content": response.message.content, "role": response.message.role}
 
 
 @app.get("/cards")

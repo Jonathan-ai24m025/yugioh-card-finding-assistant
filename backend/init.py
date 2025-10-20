@@ -3,8 +3,26 @@ import pandas as pd
 from weaviate.classes.config import Property, DataType, Configure
 
 
+def initialize_ollama(get_llm, model_name):
+    client = get_llm()
+    list_response = client.list()
+
+    if not model_name in [m.model for m in list_response.models]:
+        print(f"Model {model_name} not found. Pulling (THIS CAN TAKE SEVERAL MINUTES)...")
+        client.pull(model_name)
+    else:
+        print(f"Model {model_name} found.")
+
+    client.chat(model="mistral:latest", messages=[
+        {
+            'role': 'user',
+            'content': 'This is a healthcheck. Answer with "1".',
+        },
+    ])
+    print(f"Model {model_name} is ready.")
+
+
 def initialize_weaviate(csv_path: str, get_rag, tokenizer):
-    """Check if Weaviate has data; if empty, load from CSV."""
     client = get_rag()
 
     # Wait until Weaviate is ready
