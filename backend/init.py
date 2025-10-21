@@ -22,7 +22,7 @@ def initialize_ollama(get_llm, model_name):
     print(f"Model {model_name} is ready.")
 
 
-def initialize_weaviate(csv_path: str, get_rag, tokenizer):
+def initialize_weaviate(csv_path: str, get_rag, embedder):
     client = get_rag()
 
     # Wait until Weaviate is ready
@@ -88,7 +88,7 @@ def initialize_weaviate(csv_path: str, get_rag, tokenizer):
             if not text.strip():
                 continue  # skip empty
 
-            vector = tokenizer.encode(text)
+            vector = embedder.encode(text)
 
             properties = {
                 "name": row.get("name"),

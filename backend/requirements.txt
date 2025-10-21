@@ -6,3 +6,7 @@ weaviate-client
 transformers
 sentence-transformers
 ollama
+langchain
+langchain-community
+langchain-ollama
+langchain-openai
