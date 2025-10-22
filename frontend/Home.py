@@ -1,105 +1,125 @@
 import streamlit as st
 import requests
+from typing import List, Dict, Any
 
 # -------------------------------
 # Streamlit Page Setup
 # -------------------------------
-st.set_page_config(
-    page_title="Text to API",
-    page_icon="📤",
-    layout="wide"
-)
+st.set_page_config(page_title="Yu-Gi-Oh Chat Assistant", page_icon="🃏", layout="wide")
 
-# -------------------------------
-# Page Title
-# -------------------------------
-st.title("📤 Send Text to API")
+st.title("🃏 Yu-Gi-Oh Chat Assistant")
+st.caption("Chat with the AI assistant using the RAG + Ollama backend.")
 
 # -------------------------------
 # API Endpoint
 # -------------------------------
-API_BASE_URL = "http://backend:8000/api/v1"  # ✅ Adjust based on your setup
+API_BASE_URL = "http://backend:8000/api/v1"
 
 # -------------------------------
-# Input Section
+# Persistent State
 # -------------------------------
-text_input = st.text_area(
-    "Enter your text to send:",
-    placeholder="Type your message here...",
-    height=120
-)
-
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    send_button = st.button("📨 Send Text", type="primary", use_container_width=True)
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history: list[dict[str, any]] = []
+if "error" not in st.session_state:
+    st.session_state.error = None
 
 # -------------------------------
-# CSS Styling for Card Look
+# Helper: Convert to API format
 # -------------------------------
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #F8F9FA;
+def build_api_history(history: list[dict[str, any]]) -> list[dict[str, any]]:
+    api_hist = []
+    for item in history:
+        api_hist.append({"role": "user", "content": item["user"], "cards": []})
+        api_hist.append({"role": "assistant", "content": item["assistant"], "cards": item["cards"]})
+    return api_hist
+
+# -------------------------------
+# Send message to backend
+# -------------------------------
+def send_message(user_text: str):
+    payload = {
+        "message": {"role": "user", "content": user_text, "cards": []},
+        "history": build_api_history(st.session_state.chat_history),
     }
-    div[data-testid="stMarkdownContainer"] h3 {
-        color: #2E86C1;
-        margin-bottom: 0.3rem;
-    }
-    div[data-testid="stMarkdownContainer"] p {
-        margin: 0.2rem 0;
-    }
-    small {
-        color: #555;
-        font-size: 0.85rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+
+    try:
+        resp = requests.post(f"{API_BASE_URL}/chat", json=payload, timeout=20)
+        resp.raise_for_status()
+    except Exception as e:
+        st.session_state.error = f"Request failed: {e}"
+        return None
+
+    try:
+        data = resp.json()
+    except Exception as e:
+        st.session_state.error = f"Failed to parse JSON: {e}"
+        return None
+
+    msg = data.get("content", data)
+    assistant_text = str(msg.get("content", ""))
+    cards = msg.get("cards", []) or []
+
+    normalized_cards = [
+        {
+            "name": c.get("name", "Unknown"),
+            "description": c.get("description", "No description."),
+            "attack": c.get("attack", "N/A"),
+            "defense": c.get("defense", "N/A"),
+            "price": c.get("price", "N/A"),
+        }
+        for c in cards if isinstance(c, dict)
+    ]
+
+    return assistant_text, normalized_cards
 
 # -------------------------------
-# API Call and Display
+# Render Chat
 # -------------------------------
-if send_button:
-    if text_input.strip():
-        try:
-            with st.spinner("⏳ Sending request..."):
-                response = requests.get(
-                    f"{API_BASE_URL}/rag/{text_input}",
-                    timeout=10
-                )
+for msg in st.session_state.chat_history:
+    with st.chat_message("user"):
+        st.markdown(msg["user"])
 
-            if response.status_code == 200:
-                st.success("✅ Data fetched successfully!")
+    with st.chat_message("assistant"):
+        st.markdown(msg["assistant"])
 
-                data = response.json()
-                objects = data.get("results", {}).get("objects", [])
+        # Render any returned cards in a nice grid
+        cards = msg.get("cards", [])
+        if cards:
+            cols = st.columns(min(len(cards), 3))
+            for i, card in enumerate(cards):
+                with cols[i % len(cols)]:
+                    st.markdown(f"**{card['name']}**")
+                    st.caption(card["description"])
+                    st.text(f"ATK: {card['attack']} | DEF: {card['defense']}")
+                    st.text(f"💰 Price: {card['price']}")
 
-                if not objects:
-                    st.info("No cards found.")
-                else:
-                    st.subheader("🃏 Results:")
+# -------------------------------
+# Chat Input (Native)
+# -------------------------------
+user_input = st.chat_input("Type your message...")
 
-                    # Create a grid layout: 3 cards per row
-                    num_cols = 3
-                    for i in range(0, len(objects), num_cols):
-                        cols = st.columns(num_cols)
-                        for j, col in enumerate(cols):
-                            if i + j < len(objects):
-                                card = objects[i + j]
-                                props = card.get("properties", {})
+if user_input:
+    # Show user message immediately
+    st.chat_message("user").markdown(user_input)
 
-                                with col.container(border=True):
-                                    st.markdown(f"### {props.get('name', 'Unknown')}")
-                                    st.markdown(f"**Price:** {props.get('price', 'N/A')}")
-                                    st.markdown(f"**Attack:** {props.get('attack', 'N/A')}")
-                                    st.markdown(f"**Defense:** {props.get('defense', 'N/A')}")
-                                    st.markdown(
-                                        f"<small>{props.get('description', 'No description')}</small>",
-                                        unsafe_allow_html=True
-                                    )
+    result = send_message(user_input)
+    if result:
+        assistant_text, cards = result
 
-            else:
-                st.error(f"❌ Failed to send. Status: {response.status_code}")
-        except Exception as e:
-            st.error(f"⚠️ Error: {str(e)}")
-    else:
-        st.warning("⚠️ Please enter some text first.")
+        # Display assistant message
+        with st.chat_message("assistant"):
+            st.markdown(assistant_text)
+
+            if cards:
+                cols = st.columns(min(len(cards), 3))
+                for i, card in enumerate(cards):
+                    with cols[i % len(cols)]:
+                        st.markdown(f"**{card['name']}**")
+                        st.caption(card["description"])
+                        st.text(f"ATK: {card['attack']} | DEF: {card['defense']}")
+                        st.text(f"💰 Price: {card['price']}")
+
+        # Save to history
+        st.session_state.chat_history.append(
+            {"user": user_input, "assistant": assistant_text, "cards": cards}
+        )

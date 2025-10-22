@@ -51,7 +51,7 @@ class Card(BaseModel):
     name: str = Field(description="The name of the card")
     description: str = Field(description="The description of the card")
     attack: Optional[str] = Field(default=None, description="The attack value of the card. Not all cards have attack")
-    defense: Optional[str] = Field(default=None, description="The defense value of the card. Not all carsd have defense")
+    defense: Optional[str] = Field(default=None, description="The defense value of the card. Not all cards have defense")
     price: str = Field(description="The price of the card")
 
 class ChatMessage(BaseModel):
