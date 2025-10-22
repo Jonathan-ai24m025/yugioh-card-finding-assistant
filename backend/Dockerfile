@@ -1,5 +1,6 @@
-# Use a lightweight Python base image
-FROM python:3.11-slim
+# Depending on your GPU, cuda-version might be outdated.
+# Older image was chosen for compatibility
+FROM pytorch/pytorch:2.7.1-cuda11.8-cudnn9-runtime
 
 # Set working directory inside the container
 WORKDIR /app

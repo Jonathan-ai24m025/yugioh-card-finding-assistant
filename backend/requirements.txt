@@ -4,5 +4,9 @@ psycopg2-binary
 pandas
 weaviate-client
 transformers
-torch
-requests
+sentence-transformers
+ollama
+langchain
+langchain-community
+langchain-ollama
+langchain-openai

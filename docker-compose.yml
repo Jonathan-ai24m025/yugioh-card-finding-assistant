@@ -7,12 +7,8 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - DATABASE_HOST=postgres
-      - DATABASE_NAME=postgres
-      - DATABASE_USER=postgres
-      - DATABASE_PASSWORD=postgres
-      - API_HOST=fastapi
-      - API_PORT=8000
+      - API_HOST=${API_HOST}
+      - API_PORT=${API_PORT}
     depends_on:
       - postgres
       - fastapi
@@ -25,12 +21,20 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_HOST=postgres
-      - DATABASE_NAME=postgres
-      - DATABASE_USER=postgres
-      - DATABASE_PASSWORD=postgres
-      - WEAVIATE_HOST=weaviate
-      - WEAVIATE_PORT=8080
+      - OLLAMA_URL=${OLLAMA_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - WEAVIATE_HOST=${WEAVIATE_HOST}
+      - WEAVIATE_PORT=${WEAVIATE_PORT}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
     depends_on:
       - postgres
       - weaviate
@@ -41,23 +45,23 @@ services:
     container_name: postgres_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - ./db/data:/var/lib/postgresql/data
       - ./db/initdb:/docker-entrypoint-initdb.d
 
-  # === DATABASE GUI ===
+  # === PGADMIN ===
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "5050:80"
     depends_on:
@@ -70,6 +74,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+      - "50051:50051"
     environment:
       - QUERY_DEFAULTS_LIMIT=25
       - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
@@ -78,8 +83,6 @@ services:
       - CLUSTER_HOSTNAME=weaviate
     volumes:
       - ./rag:/var/lib/weaviate
-    depends_on:
-      - postgres
 
   # === REVERSE PROXY ===
   nginx:
@@ -93,4 +96,3 @@ services:
     depends_on:
       - streamlit
       - fastapi
-

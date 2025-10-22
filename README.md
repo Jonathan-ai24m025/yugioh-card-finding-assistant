@@ -59,10 +59,10 @@ Ziel des Projekts ist die Entwicklung eines Prototyps, der:
 
 ## References
 - **Dataset:** [Kaggle – Yu-Gi-Oh! Karten](https://www.kaggle.com/datasets/hammadus/yugioh-full-card-database-index-august-1st-2025)  
-- **LLMs:** [Mistral-7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)  
+- **LLMs:** [Mistral-7B](https://huggingface.co/mistralai/Mistral-7B-v0.1) or [GPT-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini) 
 - **Vector Search:** [Weaviate](https://weaviate.io/), [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)  
 - **Database:** [PostgreSQL](https://www.postgresql.org/)  
-- **Guardrails:** [Microsoft Presidio](https://github.com/microsoft/presidio), [NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails)  
+- **Guardrails:** LangChain's Middleware
 - **Frameworks / Tools:** FastAPI, Streamlit, LangChain, Docker Compose  
 - **Hosting / API:** Hugging Face Inference API oder lokal über FastAPI  
 
