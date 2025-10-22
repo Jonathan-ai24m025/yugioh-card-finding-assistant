@@ -50,9 +50,9 @@ sql_tool = None
 class Card(BaseModel):
     name: str = Field(description="The name of the card")
     description: str = Field(description="The description of the card")
-    attack: Optional[str] = Field(default=None, description="The attack value of the card. Not all cards have attack")
-    defense: Optional[str] = Field(default=None, description="The defense value of the card. Not all cards have defense")
-    price: str = Field(description="The price of the card")
+    attack: Optional[Any] = Field(default=None, description="The attack value of the card. Not all cards have attack")
+    defense: Optional[Any] = Field(default=None, description="The defense value of the card. Not all cards have defense")
+    price: Optional[Any] = Field(default=None, description="The price of the card")
 
 class ChatMessage(BaseModel):
     role: str = Field(default="assistant", description="The role of the AI. Should be assistant.")
@@ -120,8 +120,10 @@ def vectorstorage_tool(query: str) -> str:
     results = collection.query.near_vector(
         near_vector=query_vector,
         limit=10,
-        return_properties=["name", "description", "attack", "defense", "price"]
+        return_properties=["name", "description", "rarity", "attribute", "set_name",
+                           "type", "sub_type", "attack", "defense", "price"]
     )
+
     client.close()
     output = json.dumps([r.properties for r in results.objects])
     print("Running RAG query done: " + str(output))
@@ -153,7 +155,7 @@ def handle_tool_errors(request, handler):
 
 class SafeQuerySQLDatabaseTool(QuerySQLDatabaseTool):
     def _run(self, query: str, **kwargs):
-        max_rows = 5
+        max_rows = 10
         print("Running DB query: " + str(query))
 
         # Normalize and strip comments
@@ -188,11 +190,21 @@ def get_sql_tool():
         )
 
         sql_tool = SafeQuerySQLDatabaseTool(
-            description="Yugioh Card Database (read-only) consisting of a table "
-                        "'cards' (index_id INTEGER, name TEXT, description TEXT, set_id TEXT, rarity TEXT, "
-                        "price TEXT, volatility TEXT, type TEXT, sub_type TEXT, attribute TEXT, rank TEXT, attack TEXT, "
-                        "defense TEXT, set_name TEXT, set_release TEXT, name_official TEXT, index INTEGER, "
-                        "index_market INTEGER, join_id TEXT);",
+            description=(
+                "PostgreSQL Yugioh Card Database (read-only).\n"
+                "It consists of the following tables and relationships:\n "
+                "1) card_sets(card_set_id INT PK, set_id TEXT, set_name TEXT, set_release DATE, join_id TEXT) — stores card set metadata;\n"
+                "2) cards(card_id INT PK, card_set_id INT FK→card_sets.card_set_id, name TEXT, description TEXT, rarity TEXT, price FLOAT, "
+                "volatility_id INT FK→volatilities.volatility_id, type_id INT FK→types.type_id, sub_type TEXT, "
+                "attribute_id INT FK→attributes.attribute_id, rank TEXT, attack FLOAT, defense FLOAT) — main table of cards (all prices in dollars);\n"
+                "3) types(type_id SERIAL PK, type_name TEXT) — lookup for card types (NONE, MONSTER, SPELL, TRAP);\n"
+                "4) attributes(attribute_id SERIAL PK, attribute_name TEXT) — lookup for card attributes (NONE, EARTH, WIND, WATER, DARK, LIGHT, FIRE, DIVINE);\n"
+                "5) volatilities(volatility_id SERIAL PK, volatility_name TEXT) — lookup for volatility levels (NONE, Low, Med, High, Indeterminate).\n"
+                "Relationships: each card belongs to one card_set, and has one type, attribute, and volatility.\n"
+                "Use JOINs to combine these tables when querying. Always use table aliases like c (cards), cs (card_sets), t (types), a (attributes), and v (volatilities).\n"
+                "Be mindful of querry limits and do not overload the database. Expect at most 20 results to be returned."
+            )
+            ,
             db=db
         )
 
