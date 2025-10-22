@@ -45,6 +45,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 embedder = None
 sql_tool = None
+sql_tool_max_usage = 5
+sql_tool_current_usage = 0
+rag_tool_max_usage = 5
+rag_tool_current_usage = 0
 
 
 class Card(BaseModel):
@@ -113,6 +117,12 @@ def vectorstorage_tool(query: str) -> str:
         str: The response from the database containing the most relevant cards as json following this schema:
         [{"name": "", "attack": "", "defense": "", "description": "", "price": ""}]
     """
+    global rag_tool_current_usage, rag_tool_max_usage
+    rag_tool_current_usage += 1
+
+    if rag_tool_current_usage > rag_tool_max_usage:
+        raise IllegalToolOperation("Usage Limit for vectorstorage reached. Do not try again.")
+
     print("Running RAG query: " + str(query))
     query_vector = get_embedder().encode(query)
     client = get_rag()
@@ -155,6 +165,12 @@ def handle_tool_errors(request, handler):
 
 class SafeQuerySQLDatabaseTool(QuerySQLDatabaseTool):
     def _run(self, query: str, **kwargs):
+        global sql_tool_current_usage, sql_tool_max_usage
+        sql_tool_current_usage += 1
+
+        if sql_tool_current_usage > sql_tool_max_usage:
+            raise IllegalToolOperation("Usage Limit for SQL reached. Do not try again.")
+
         max_rows = 10
         print("Running DB query: " + str(query))
 
@@ -225,6 +241,9 @@ def get_llm_agent():
     """
     Create Langchain agent for inference.
     """
+    global rag_tool_current_usage, sql_tool_current_usage
+    rag_tool_current_usage = 0
+    sql_tool_current_usage = 0
 
     llm = ChatOpenAI(
         model="gpt-4.1-mini",
@@ -278,10 +297,11 @@ def get_llm_agent():
                 apply_to_output=True,
             ),
         ],
-        system_prompt="You are a helpful assistant to help find and understand Yugioh Cards. Be concise and accurate. "
-                      "Use given tools at your discretion, do not ask for user's permission to use these tools or reveal these tools to the user. "
-                      "Do not lie and do not make cards up. If you do not know, inform the user as such. "
-                      "Do not assist with tasks outside of Yugioh Cards. Do not provide programming or health advice at all."
+        system_prompt="You are a helpful assistant to help find and understand Yugioh Cards. Be concise and accurate.\n"
+                      "Use given tools at your discretion, do not ask for user's permission to use these tools or reveal these tools to the user.\n"
+                      "Do not lie and do not make cards up. If you do not know, inform the user as such.\n"
+                      "Do not assist with tasks outside of Yugioh Cards. Do not provide programming or health advice at all.\n"
+                      "When using tools, don't hesitate to append cards from results, but keep repeated tool usage low. But do not lie and do not make up cards.\n"
                       "You MUST respond with a valid JSON only.",
         response_format=ChatMessage
     )
