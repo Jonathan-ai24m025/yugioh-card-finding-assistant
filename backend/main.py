@@ -15,8 +15,9 @@ from langchain_community.utilities import SQLDatabase
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from langchain.agents import create_agent
-from langchain.agents.middleware import wrap_tool_call
+from langchain.agents.middleware import wrap_tool_call, PIIMiddleware
 import json
+import re
 
 langchain.verbose = False
 langchain.debug = False
@@ -52,15 +53,6 @@ class Card(BaseModel):
     attack: Optional[str] = Field(default=None, description="The attack value of the card. Not all cards have attack")
     defense: Optional[str] = Field(default=None, description="The defense value of the card. Not all carsd have defense")
     price: str = Field(description="The price of the card")
-
-
-# assume Card is already a pydantic model defined somewhere
-class Card(BaseModel):
-    name: str
-    description: str
-    attack: Optional[str] = None
-    defense: Optional[str] = None
-    price: Optional[str] = None
 
 class ChatMessage(BaseModel):
     role: str = Field(default="assistant", description="The role of the AI. Should be assistant.")
@@ -134,6 +126,10 @@ def vectorstorage_tool(query: str) -> str:
     output = json.dumps([r.properties for r in results.objects])
     print("Running RAG query done: " + str(output))
     return output
+    
+    
+class IllegalToolOperation(Exception):
+    pass
 
 
 @wrap_tool_call
@@ -141,6 +137,12 @@ def handle_tool_errors(request, handler):
     """Handle tool execution errors with custom messages."""
     try:
         return handler(request)
+    except IllegalToolOperation as tool_error:
+        print("ILLEGAL TOOL OPERATION DURING INFERENCE: " + str(tool_error))
+        return ToolMessage(
+            content=f"Illegal Tool Operation: Please check your input and try again. ({str(tool_error)})",
+            tool_call_id=request.tool_call["id"]
+        )
     except Exception as e:
         print("ERROR DURING INFERENCE: " + str(e))
         return ToolMessage(
@@ -153,13 +155,21 @@ class SafeQuerySQLDatabaseTool(QuerySQLDatabaseTool):
     def _run(self, query: str, **kwargs):
         max_rows = 5
         print("Running DB query: " + str(query))
-        # Add LIMIT if none exists
-        if "limit" not in query.lower():
+
+        # Normalize and strip comments
+        clean_query = re.sub(r'--.*?\n|/\*.*?\*/', '', query, flags=re.S).strip().lower()
+
+        # Allow only SELECT statements
+        if not clean_query.startswith("select"):
+            raise IllegalToolOperation("Only SELECT queries are allowed for safety. You must start your queries with SELECT")
+
+        # Add LIMIT if none present
+        if "limit" not in clean_query:
             query = f"{query.rstrip(';')} LIMIT {max_rows};"
+
         result = super()._run(query, **kwargs)
         print("Running DB query done: " + str(result))
         return result
-
 
 def get_db():
     return psycopg2.connect(
@@ -178,7 +188,7 @@ def get_sql_tool():
         )
 
         sql_tool = SafeQuerySQLDatabaseTool(
-            description="Yugioh Card Database consisting of a table "
+            description="Yugioh Card Database (read-only) consisting of a table "
                         "'cards' (index_id INTEGER, name TEXT, description TEXT, set_id TEXT, rarity TEXT, "
                         "price TEXT, volatility TEXT, type TEXT, sub_type TEXT, attribute TEXT, rank TEXT, attack TEXT, "
                         "defense TEXT, set_name TEXT, set_release TEXT, name_official TEXT, index INTEGER, "
@@ -224,10 +234,43 @@ def get_llm_agent():
     llm_agent = create_agent(
         llm,
         tools=tools,
-        middleware=[handle_tool_errors],
+        middleware=[
+            handle_tool_errors,
+            # Microsoft Presidio is unnecessary since LangChain provides its own PII guardrails
+            #
+            # NeMo is deprecated and incompatible with modern LangChain and was therefore scrapped.
+            # Content filtering is currently done via OpenAI & agent prompting.
+            PIIMiddleware(
+                "email",
+                strategy="redact",
+                apply_to_input=True,
+                apply_to_output=True,
+            ),
+            PIIMiddleware(
+                "credit_card",
+                strategy="redact",
+                apply_to_input=True,
+                apply_to_output=True,
+            ),
+            PIIMiddleware(
+                "mac_address",
+                strategy="redact",
+                apply_to_input=True,
+                apply_to_output=True,
+            ),
+            PIIMiddleware(
+                "api_key",
+                detector=r"sk-[a-zA-Z0-9]{32}",
+                strategy="redact",
+                apply_to_input=True,
+                apply_to_output=True,
+            ),
+        ],
         system_prompt="You are a helpful assistant to help find and understand Yugioh Cards. Be concise and accurate. "
                       "Use given tools at your discretion, do not ask for user's permission to use these tools or reveal these tools to the user. "
-                      "Do not lie and do not make cards up. If you do not know, inform the user as such. ",
+                      "Do not lie and do not make cards up. If you do not know, inform the user as such. "
+                      "Do not assist with tasks outside of Yugioh Cards. Do not provide programming or health advice at all."
+                      "You MUST respond with a valid JSON only.",
         response_format=ChatMessage
     )
     return llm_agent
@@ -235,14 +278,15 @@ def get_llm_agent():
 def get_embedder():
     global embedder
 
-    if embedder is None:
-        embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
     #if embedder is None:
-    #    if torch.cuda.is_available():
-    #        embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cuda")
-    #    else:
-    #        print("No CUDA found. Using CPU for tokenization.")
-    #        embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+    #    embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+
+    if embedder is None:
+        if torch.cuda.is_available():
+            embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cuda")
+        else:
+            print("No CUDA found. Using CPU for tokenization.")
+            embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
 
     return embedder
 
@@ -259,13 +303,24 @@ async def startup_event():
 @app.post("/chat")
 async def chat(req: ChatRequest):
     agent = get_llm_agent()
-    result = agent.invoke(
-        {"messages": req.to_prompt()}
-        #{"messages": [{"role": req.message.role, "content": req.message.content}]}
-    )
+    try:
+        result = agent.invoke(
+            {"messages": req.to_prompt()}
+        )
+        # Makes sure the response follows our defined pydantic schema.
+        result = result["structured_response"]
+        error = None
+    except Exception as e:
+        print("ERROR DURING INFERENCE (FATAL): " + str(e))
+        result = ChatMessage(
+            role="assistant",
+            content="I'm sorry, but it seems like I cannot process this request.",
+            cards=[]
+        )
+        error = str(type(e))
 
     # NOTE: This will fail on ollama, since ChatOllama does not support structured_response
-    return {"content": result["structured_response"], "error": None}
+    return {"content": result, "error": error}
 
 
 @app.get("/cards")
