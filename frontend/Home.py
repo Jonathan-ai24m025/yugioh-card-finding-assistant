@@ -47,15 +47,16 @@ def send_message(user_text: str):
         resp.raise_for_status()
     except Exception as e:
         st.session_state.error = f"Request failed: {e}"
-        return None
+        return None, None, str(e)
 
     try:
         data = resp.json()
     except Exception as e:
         st.session_state.error = f"Failed to parse JSON: {e}"
-        return None
+        return None, None, str(e)
 
     msg = data.get("content", data)
+    error = data.get("error", None)
     assistant_text = str(msg.get("content", ""))
     cards = msg.get("cards", []) or []
 
@@ -70,7 +71,7 @@ def send_message(user_text: str):
         for c in cards if isinstance(c, dict)
     ]
 
-    return assistant_text, normalized_cards
+    return assistant_text, normalized_cards, error
 
 # -------------------------------
 # Render Chat
@@ -94,22 +95,30 @@ for msg in st.session_state.chat_history:
                     st.text(f"💰 Price: {card['price']}")
 
 # -------------------------------
-# Chat Input (Native)
+# Chat Input Handling
 # -------------------------------
 user_input = st.chat_input("Type your message...")
 
 if user_input:
-    # Show user message immediately
+    # Show user message
     st.chat_message("user").markdown(user_input)
 
-    result = send_message(user_input)
-    if result:
-        assistant_text, cards = result
+    assistant_text, cards, error = send_message(user_input)
 
-        # Display assistant message
+    if assistant_text is not None:
+        # Show assistant message
         with st.chat_message("assistant"):
-            st.markdown(assistant_text)
+            if error:
+                # Highlight error visually
+                st.markdown(
+                    f"<div style='background-color:#F8D7DA; color:#842029; padding:10px; border-radius:5px;'>"
+                    f"⚠️ {assistant_text}</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(assistant_text)
 
+            # Show cards normally
             if cards:
                 cols = st.columns(min(len(cards), 3))
                 for i, card in enumerate(cards):

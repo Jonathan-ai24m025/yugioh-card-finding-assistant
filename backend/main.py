@@ -322,6 +322,10 @@ async def chat(req: ChatRequest):
     # NOTE: This will fail on ollama, since ChatOllama does not support structured_response
     return {"content": result, "error": error}
 
+'''
+##############################
+# Only for debug purposes
+##############################
 
 @app.get("/cards")
 def get_cards():
@@ -356,3 +360,5 @@ def rag_search(query: str):
         return {"results": results}
     except Exception as e:
         return {"error": str(e)}
+
+'''
