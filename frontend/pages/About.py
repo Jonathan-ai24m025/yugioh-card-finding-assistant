@@ -49,7 +49,7 @@ st.markdown("""
 - **Backend**: FastAPI for serving API endpoints.
 - **Database**: PostgreSQL for storing card information.
 - **Vector Database**: Weaviate for semantic search capabilities.
-- **LLM**: Ollama model (Mistral) for natural language responses.
+- **LLM**: OpenAI model (GPT-4o-mini) for natural language responses.
 - **Frontend**: Streamlit for an interactive user interface.
 - **RAG**: Combines retrieval from the database with LLM generation for accurate and conversational responses.
 """)
