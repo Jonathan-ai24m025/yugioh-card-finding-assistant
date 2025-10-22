@@ -47,8 +47,6 @@ def initialize_weaviate(csv_path: str, get_rag, embedder):
         description="Trading cards with text and attributes for semantic search",
         vector_config=Configure.Vectors.self_provided(),
         properties=[
-            # TODO: clean up csv from NaN etc.
-            #       setting data_type to TEXT for all for now.
             Property(name="name", data_type=DataType.TEXT),
             Property(name="description", data_type=DataType.TEXT),
             Property(name="set_id", data_type=DataType.TEXT),
@@ -82,6 +80,7 @@ def initialize_weaviate(csv_path: str, get_rag, embedder):
                 str(row.get("sub_type", "")),
                 str(row.get("attribute", "")),
                 str(row.get("set_name", "")),
+                str(row.get("rank", ""))
             ]
             text = ". ".join([t for t in text_parts if t.strip()])
 
