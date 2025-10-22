@@ -1,5 +1,27 @@
 # yugioh-card-finding-assistant
 Yugioh Card Finding Assistant
+
+## Quickstart
+### Prerequisits
+These must be installed:
+- Docker (Compose)
+- nvidia-container-toolkit
+
+You must have an *OPEN API KEY*!
+
+Create .env file for docker compose.
+
+    cp example.env .env
+
+Input your *OPEN API KEY* into .env
+
+Start the project.
+
+    sudo docker compose up
+
+**First deployment may take several minutes to startup. Refer to docker compose backend-container logs.**
+
+
 ## Use Case
 Ein intelligenter Assistent zur schnellen und semantischen Suche nach Yu-Gi-Oh!-Karten anhand von natürlicher Sprache.
 
@@ -59,7 +81,7 @@ Ziel des Projekts ist die Entwicklung eines Prototyps, der:
 
 ## References
 - **Dataset:** [Kaggle – Yu-Gi-Oh! Karten](https://www.kaggle.com/datasets/hammadus/yugioh-full-card-database-index-august-1st-2025)  
-- **LLMs:** [Mistral-7B](https://huggingface.co/mistralai/Mistral-7B-v0.1) or [GPT-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini) 
+- **LLMs:** [GPT-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini) 
 - **Vector Search:** [Weaviate](https://weaviate.io/), [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)  
 - **Database:** [PostgreSQL](https://www.postgresql.org/)  
 - **Guardrails:** LangChain's Middleware

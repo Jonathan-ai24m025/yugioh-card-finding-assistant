@@ -19,14 +19,15 @@ from langchain.agents.middleware import wrap_tool_call, PIIMiddleware
 import json
 import re
 
+# Disable these to avoid non-implemented langchain behavior (Ollama)
 langchain.verbose = False
 langchain.debug = False
 langchain.llm_cache = False
 
-
+# Instantiaze API
 app = FastAPI(root_path="/api/v1")
 
-
+# Initialize environment variables
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 #OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:latest")
@@ -43,6 +44,7 @@ WEAVIATE_PORT = os.getenv("WEAVIATE_PORT", 8080)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
+# Initialize global parameters
 embedder = None
 sql_tool = None
 sql_tool_max_usage = 5
@@ -52,6 +54,7 @@ rag_tool_current_usage = 0
 
 
 class Card(BaseModel):
+    # chat structured card parameter
     name: str = Field(description="The name of the card")
     description: str = Field(description="The description of the card")
     attack: Optional[Any] = Field(default=None, description="The attack value of the card. Not all cards have attack")
@@ -59,6 +62,7 @@ class Card(BaseModel):
     price: Optional[Any] = Field(default=None, description="The price of the card")
 
 class ChatMessage(BaseModel):
+    # chat structured message parameter
     role: str = Field(default="assistant", description="The role of the AI. Should be assistant.")
     content: str = Field(..., description="The content of the text response.")
     cards: List[Card] = Field(default_factory=list, description="A list of cards relevant to the content.")
@@ -80,6 +84,7 @@ class ChatMessage(BaseModel):
         return {"role": self.role, "content": self.content, "cards": cards_serializable}
 
 class ChatRequest(BaseModel):
+    # chat input parameter structure.
     message: ChatMessage
     history: List[ChatMessage] = Field(default_factory=list)
 
@@ -141,6 +146,7 @@ def vectorstorage_tool(query: str) -> str:
     
     
 class IllegalToolOperation(Exception):
+    # Any illegal tool operation raises this error.
     pass
 
 
@@ -164,6 +170,7 @@ def handle_tool_errors(request, handler):
 
 
 class SafeQuerySQLDatabaseTool(QuerySQLDatabaseTool):
+    # Wrapper class for QuerySQLDatabaseTool. Ensures basic Guardrails are met when using tool.
     def _run(self, query: str, **kwargs):
         global sql_tool_current_usage, sql_tool_max_usage
         sql_tool_current_usage += 1
@@ -190,6 +197,7 @@ class SafeQuerySQLDatabaseTool(QuerySQLDatabaseTool):
         return result
 
 def get_db():
+    # returns (non-LangChain) client for postgres
     return psycopg2.connect(
         host=DB_HOST,
         dbname=DB_NAME,
@@ -198,6 +206,7 @@ def get_db():
     )
 
 def get_sql_tool():
+    # returns LangChain agent tool for sql querries.
     global sql_tool
 
     if sql_tool is None:
@@ -227,12 +236,14 @@ def get_sql_tool():
     return sql_tool
 
 def get_rag():
+    # Returns a client for vectorstorage
     return weaviate.connect_to_local(
         host=WEAVIATE_HOST,
         port=WEAVIATE_PORT
     )
 
 def get_llm():
+    # Returns a (non-Langchain) client for Ollama.
     return Client(
         host=OLLAMA_URL
     )
@@ -308,6 +319,7 @@ def get_llm_agent():
     return llm_agent
 
 def get_embedder():
+    # Returns an embedder for vectorization.
     global embedder
 
     #if embedder is None:
@@ -325,6 +337,7 @@ def get_embedder():
 
 @app.on_event("startup")
 async def startup_event():
+    # Initializes everything before serving API
     print("Checking Weaviate state...")
     print(f"Torch: {torch.__version__}, CUDA: {torch.version.cuda}")
 
@@ -334,6 +347,7 @@ async def startup_event():
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
+    # Main chat endpoint. Uses Langchain's Agent (LangGraph internally) with tooling and structured_response.
     agent = get_llm_agent()
     try:
         result = agent.invoke(

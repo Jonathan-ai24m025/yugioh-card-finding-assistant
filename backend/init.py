@@ -4,6 +4,7 @@ from weaviate.classes.config import Property, DataType, Configure
 
 
 def initialize_ollama(get_llm, model_name):
+    # Initializes ollama to pull and serve model.
     client = get_llm()
     list_response = client.list()
 
