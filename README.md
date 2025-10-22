@@ -86,6 +86,5 @@ Ziel des Projekts ist die Entwicklung eines Prototyps, der:
 - **Database:** [PostgreSQL](https://www.postgresql.org/)  
 - **Guardrails:** LangChain's Middleware
 - **Frameworks / Tools:** FastAPI, Streamlit, LangChain, Docker Compose  
-- **Hosting / API:** Hugging Face Inference API oder lokal über FastAPI  
 
 ---
